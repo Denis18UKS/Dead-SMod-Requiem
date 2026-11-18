@@ -46,7 +46,7 @@ public final class PatchJar implements Opcodes {
                             if (call.owner.equals("net/minecraft/util/math/MathHelper")
                                     && call.name.equals("func_76136_a") && call.desc.equals("(Ljava/util/Random;II)I")) {
                                 call.owner = GEN;
-                                call.name = "chooseStructureY";
+                                call.name = entry.getValue().equals("exit") ? "chooseExitStructureY" : "chooseStructureY";
                                 surface++;
                             }
                             if ((call.owner.equals("net/mcreator/horrormod/procedures/TestProcedure") || call.owner.equals("net/mcreator/horrormod/procedures/TestOlegProcedure"))
