@@ -10,6 +10,8 @@ public class PlayerEntity extends Entity {
   public Inventory field_71071_by = new Inventory();
   public double x=0,y=81,z=0;
   public String message;
+  public ItemStack func_184614_ca(){return field_71071_by.field_70462_a.isEmpty()?null:field_71071_by.field_70462_a.get(0);}
+  public ItemStack func_184592_cb(){return null;}
   public double func_226277_ct_(){return x;}
   public double func_226278_cu_(){return y;}
   public double func_226281_cx_(){return z;}
