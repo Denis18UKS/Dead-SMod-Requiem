@@ -1,60 +1,30 @@
-# Dead's Mod — Requiem (Forge 1.16.5)
+# Dead's Mod Requiem v3 — Forge 1.16.5
 
-**Status: experimental; 1.16.5 Forge client/server launches have not been performed.**
+This mod is an **experimental patch of the supplied Dead's Mod JAR** (`horrormod`) built as a universal client/server binary. Back up existing saves before testing.
 
-This repo contains a bytecode patcher and Java 8 runtime hooks for the user-provided
-**horrormod 1.0.0** JAR. The client and server originals have identical ZIP entries,
-so the same mod base is patched for both sides.
+## New features
 
-## Compass bug fix (v2)
+- **Right-click a special compass** to select between **Key Structure** and **Exit Structure**. Two independent types of targets and textures; state saved in the item NBT.
+- The underlying vanilla compass retains its angle/lodestone behavior. Normal vanilla compasses keep their models. Special compasses use custom NBT model data 314159 (key) or 314160 (exit), with 32 directional pixel-art sprites in each mode.
+- **White through-wall outline** of the currently selected NBT dungeon once within 128 blocks, using mesh edges calculated from the original key/exit structures. Rendering is client-only and targets the server-provided actual origin, never a guessed location.
+- **Safe entry into the dead dimension:** attempt a natural, free-standing landing location nearby, otherwise build a small 5×5 obsidian safety platform and clear headroom. `/Secreat` keeps its existing separate pumpkin-platform logic.
+- Compass auto-given once in the dead dimension, with existing v2 structure-position persistence.
 
-- Fixes the ItemStack constructor: uses 1.16.5's \`IItemProvider\`, not \`Item\`.
-- Issues one marked vanilla compass when entering \`horrormod:death_dim\`
-  or when the player is already in it (server-side tick fallback).
-- Does **not** grant endless duplicates after the compass is dropped;
-  also finds the marked compass in the offhand.
-- Captures the **actual BlockPos** immediately after the original key/exit
-  NBT structure template placement call, rather than guessing where a
-  structure should appear.
-- Stores located placements in the dimension's \`WorldSavedData\`.
-- The compass only points at coordinates that were recorded after real
-  placement. If the registry is empty, it displays **"Компас мёртвых (цель не найдена)"**
-  instead of giving a fake target.
-- Keeps older worldgen-spacing changes and original mod mechanics.
+## Build
 
-**Important save compatibility limitation:** The new registry cannot automatically
-discover already-generated key/exit dungeons in older chunks. Explore **new terrain**
-after upgrading to register newly spawned structures. The compass will not have
-a target until one actually generates. Structure registration is based on a
-template-placement call, which does not independently validate placed blocks.
+The original input binary is not checked into this public repository because it contains third-party recorded audio. Unless you have permission to redistribute the audio, change the repository to private before attaching the original input to a release.
 
-## Build via GitHub Actions
+1. Open **Releases → Draft new release**, tag `original-input-v1`.
+2. Attach the original client jar under the exact name `original.jar` (SHA256 `a933c66ce2fd8b34d6287a96144f07fc0718c76c899271f6aedb542a044389fa`).
+3. Publish the release; the `.github/workflows/build.yml` workflow will run. Alternatively run it from the Actions tab.
+4. Download the `DeadsMod-Requiem-v3-build` artifact after CI succeeds.
 
-The original 60 MB JAR contains third-party sound files; it is **not published
-in source control**. For legal/privacy reasons, switch this repository to
-Private unless you have redistribution permission.
+The workflow builds the JAR and a source bundle with **decompiled original classes** using CFR, plus all patch source code, asset generation scripts, tests, and original resources. It compiles our mod hooks against minimal **test-only API stubs**, which are **not** packaged in the generated JAR.
 
-1. Create a GitHub Release tagged \`original-input-v1\`.
-2. Upload **the original** \`Dead's Mod (Client).jar\` as asset **\`original.jar\`**
-   (not a patched version and not the Server one).
-3. Publish the release. The workflow \`.github/workflows/build.yml\` then builds.
-4. Open **Actions → Build Dead's Mod Requiem → Artifacts**
-   and download \`DeadsMod-Requiem-build\`.
+## Test scope / limitations
 
-The workflow checks the original SHA256, compiles Java 8 hooks against
-*compile-only Minecraft API stubs* (not packaged in JAR), executes mock smoke
-tests, patches the original JAR using ASM, and decompiles original classes into
-a source archive using CFR.
+Java 8 compilation + mocked server/event/structure NBT tests and JAR ZIP integrity have been checked locally. **No full Minecraft Forge client or dedicated-server session has been run.** The outline rendering and teleport compatibility on real modpacks still require testing. Do not replace your only save with an experimental build.
 
-For local Windows builds, install JDK 21, put the same \`original.jar\` in
-the repository root, and run \`build_windows.bat\`. Mod runtime targets Java 8.
+Already-generated chunks from previous mod versions are not automatically indexed if they were not recorded. The white outline can only display for structures that were actually placed by the instrumented generator and saved to its index; it cannot scan old terrain without regeneration.
 
-### Tests and limitations
-
-Tests pass in a simulated Java 8 environment: automatic grant, absence of
-phantom destination, actual template coordinates, persisted NBT encoding,
-no duplicate on tick / drop, plus deterministic worldgen placements.
-
-Minecraft Forge client and dedicated-server end-to-end tests are **not**
-performed by these smoke tests. Back up an existing world before upgrading.
-Use only one JAR containing \`modId=horrormod\` in each client/server \`mods\` folder.
+Try ` /give @s minecraft:compass{DeadsModStructureCompass:1b} 1 ` inside the dead dimension, and the server should update its marker/mode/model NBT on the next 80-tick compass refresh. Existing tagged compasses are upgraded in-place.
