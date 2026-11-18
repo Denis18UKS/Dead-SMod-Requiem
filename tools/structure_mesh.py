@@ -83,8 +83,12 @@ def mesh(blocks):
             for i in range(4):
                 v1,v2=points[i],points[(i+1)%4]
                 key=tuple(sorted((v1,v2)))
-                edges[key]=edges.get(key,0)|(1<<index)
-    return edges
+                previous, count=edges.get(key,(0,0))
+                edges[key]=(previous|(1<<index), count+1)
+    # Interior edges between adjacent coplanar quads are not part of the silhouette.
+    # Otherwise flat 16x16 walls would be shown as a distracting wire grid.
+    return {edge:mask for edge,(mask,count) in edges.items()
+            if count==1 or mask.bit_count()>1}
 
 def serialize_structure(jar_path, structure, output):
     with zipfile.ZipFile(jar_path) as j:
