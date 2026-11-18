@@ -1,6 +1,5 @@
 package net.mcreator.horrormod.unified;
 
-import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.List;
@@ -13,6 +12,75 @@ public final class DeadHooks {
     private static final String MARKER = "DeadsModStructureCompass";
     private static volatile boolean warned;
     private DeadHooks() {}
+
+    /** Invoked once from HorrormodMod's constructor. Never loads Minecraft client classes on a server. */
+    public static void bootstrap() {
+        try {
+            Class<?> busClass=Class.forName("net.minecraftforge.common.MinecraftForge");
+            Object bus=busClass.getField("EVENT_BUS").get(null);
+            Class<?> handlers=Class.forName("net.mcreator.horrormod.unified.CompassEvents");
+            invoke(bus,new String[]{"register"},handlers);
+            Class<?> environment=Class.forName("net.minecraftforge.fml.loading.FMLEnvironment");
+            Object distribution=environment.getField("dist").get(null);
+            if (distribution != null && "CLIENT".equals(distribution.toString())) {
+                Class<?> renderer=Class.forName("net.mcreator.horrormod.unified.ClientOutline");
+                invoke(bus,new String[]{"register"},renderer);
+            }
+        } catch (Throwable err) {
+            System.err.println("[Requiem] Cannot register compass/render events: "+err);
+            err.printStackTrace();
+        }
+    }
+
+    public static boolean isDeathDimension(Object world) {
+        try {return world != null && DEAD.equals(dimension(world));}
+        catch (Exception e) {return false;}
+    }
+    public static boolean isCompass(Object stack) {
+        try {
+            if (stack==null) return false;
+            Object tag=invoke(stack,new String[]{"func_77978_p","getTag"});
+            return tag!=NO_METHOD && tag!=null && Boolean.TRUE.equals(invoke(tag,new String[]{"func_74767_n","getBoolean"},MARKER));
+        } catch (Exception e) {return false;}
+    }
+
+    /** Forge interaction event, handled only by the authoritative server. */
+    public static void onCompassInteract(Object event) {
+        try {
+            Object world=invoke(event,new String[]{"getWorld"});
+            if (!isServerWorld(world) || !isDeathDimension(world)) return;
+            Object stack=invoke(event,new String[]{"getItemStack"});
+            if(!isCompass(stack))return;
+            Object player=invoke(event,new String[]{"getPlayer"});
+            Object persisted=invoke(player,new String[]{"getPersistentData"});
+            Object tick=WorldgenPolicy.field(player,"field_70173_aa","ticksExisted");
+            if(persisted!=null && persisted!=NO_METHOD && tick instanceof Number) {
+                int current=((Number)tick).intValue();
+                Object last=invoke(persisted,new String[]{"func_74762_e","getInt"},"RequiemToggleTick");
+                if(last instanceof Number && ((Number)last).intValue()==current) return;
+                invoke(persisted,new String[]{"func_74768_a","putInt"},"RequiemToggleTick",current);
+            }
+            Object tag=invoke(stack,new String[]{"func_196082_o","getOrCreateTag"});
+            String old=readMode(tag);
+            String next=WorldgenPolicy.KEY.equals(old) ? WorldgenPolicy.EXIT : WorldgenPolicy.KEY;
+            invoke(tag,new String[]{"func_74778_a","putString"},"RequiemMode",next);
+            invoke(tag,new String[]{"func_74768_a","putInt"},"CustomModelData",WorldgenPolicy.KEY.equals(next)?314159:314160);
+            updateTarget(player,world,tag,next);
+            Object text=Class.forName("net.minecraft.util.text.StringTextComponent").getConstructor(String.class)
+                .newInstance(WorldgenPolicy.KEY.equals(next)?"Компас мёртвых: структура ключа":"Компас мёртвых: структура выхода");
+            invoke(player,new String[]{"func_146105_b","sendStatusMessage"},text,true);
+            // Prevent vanilla compass use/click-through to chests while changing search target.
+            Object result=Class.forName("net.minecraft.util.ActionResultType").getField("SUCCESS").get(null);
+            invoke(event,new String[]{"setCancellationResult"},result);
+            invoke(event,new String[]{"setCanceled"},true);
+        } catch (Exception e) {warn(e);}
+    }
+
+    private static String readMode(Object tag) throws Exception {
+        Object value=invoke(tag,new String[]{"func_74779_i","getString"},"RequiemMode");
+        return WorldgenPolicy.EXIT.equals(value)?WorldgenPolicy.EXIT:WorldgenPolicy.KEY;
+    }
+
 
     public static void onPlayerTick(Object event) {
         try {
@@ -34,6 +102,7 @@ public final class DeadHooks {
             Object world = WorldgenPolicy.field(player, "field_70170_p", "world");
             if (isServerWorld(world)) {
                 try {StructureRecords.flush(world);} catch(Exception e) {warn(e);}
+                safeDeathSpawn(player,world);
                 giveOrUpdate(player, world);
             }
         } catch (Exception e) { warn(e); }
@@ -113,10 +182,28 @@ public final class DeadHooks {
         if (tag == NO_METHOD || tag == null) return;
         invoke(tag, new String[]{"func_74757_a", "putBoolean"}, MARKER, true);
         invoke(tag, new String[]{"func_74757_a", "putBoolean"}, "LodestoneTracked", false);
+        String mode=readMode(tag);
+        invoke(tag,new String[]{"func_74768_a","putInt"},"CustomModelData",WorldgenPolicy.KEY.equals(mode)?314159:314160);
+        invoke(tag,new String[]{"func_74778_a","putString"},"RequiemMode",mode);
+        updateTarget(player,world,tag,mode);
+        // Never auto-add a second compass if one with our marker exists.
+        boolean present = false;
+        for (Object stack : all) if (stack == compass) {present = true;break;}
+        if (!present) {
+            Object inserted = invoke(inventory, new String[]{"func_70441_a", "addItemStackToInventory"}, compass);
+            if (!Boolean.TRUE.equals(inserted)) {
+                invoke(player, new String[]{"func_71019_a", "dropItem"}, compass, false);
+            }
+            if (playerData != null && playerData != NO_METHOD)
+                invoke(playerData,new String[]{"func_74757_a","putBoolean"},"DeadsModCompassGiven",true);
+        }
+    }
+
+    private static void updateTarget(Object player,Object world,Object tag,String mode) throws Exception {
         int x = (int)Math.floor(((Number)invoke(player, new String[]{"func_226277_ct_", "getPosX"})).doubleValue());
         int z = (int)Math.floor(((Number)invoke(player, new String[]{"func_226281_cx_", "getPosZ"})).doubleValue());
         StructureRecords.Site located = null;
-        try {located = StructureRecords.nearest(world, x, z);} catch(Exception e) {warn(e);}
+        try {located = StructureRecords.nearest(world, x, z, mode);} catch(Exception e) {warn(e);}
         if (located != null) {
             invoke(tag, new String[]{"func_74778_a", "putString"}, "LodestoneDimension", DEAD);
             Object pos = Class.forName("net.minecraft.nbt.CompoundNBT").getConstructor().newInstance();
@@ -130,20 +217,69 @@ public final class DeadHooks {
             invoke(tag, new String[]{"func_82580_o", "remove"}, "LodestoneDimension");
         }
         Object display = Class.forName("net.minecraft.nbt.CompoundNBT").getConstructor().newInstance();
-        String name = located == null ? "Компас мёртвых (цель не найдена)" : "Компас мёртвых";
+        String targetName = WorldgenPolicy.KEY.equals(mode) ? "Ключ" : "Выход";
+        String name = located == null ? "Компас мёртвых / " + targetName + " (нет цели)" : "Компас мёртвых / " + targetName;
         invoke(display, new String[]{"func_74778_a", "putString"}, "Name",
             "{\"text\":\"" + name + "\",\"color\":\"dark_purple\",\"italic\":false}");
         invoke(tag, new String[]{"func_218657_a", "put"}, "display", display);
-        boolean present = false;
-        for (Object stack : all) if (stack == compass) {present = true;break;}
-        if (!present) {
-            Object inserted = invoke(inventory, new String[]{"func_70441_a", "addItemStackToInventory"}, compass);
-            if (!Boolean.TRUE.equals(inserted)) {
-                invoke(player, new String[]{"func_71019_a", "dropItem"}, compass, false);
+    }
+
+    /** Server-authoritative safe arrival in the Dead Dimension, not in /Secreat. */
+    private static void safeDeathSpawn(Object player, Object world) throws Exception {
+        if (!isDeathDimension(world)) return;
+        int x = (int)Math.floor(((Number)invoke(player,new String[]{"func_226277_ct_","getPosX"})).doubleValue());
+        int y = (int)Math.floor(((Number)invoke(player,new String[]{"func_226278_cu_","getPosY"})).doubleValue());
+        int z = (int)Math.floor(((Number)invoke(player,new String[]{"func_226281_cx_","getPosZ"})).doubleValue());
+        if (safeFloor(world,x,y,z)) return;
+        // Prefer naturally safe terrain close to the portal: no terrain edits if one exists.
+        for (int radius=0;radius<=12;radius++) {
+            for (int dx=-radius;dx<=radius;dx++) for(int dz=-radius;dz<=radius;dz++) {
+                if(Math.max(Math.abs(dx),Math.abs(dz))!=radius)continue;
+                for(int dy=10;dy>=-18;dy--) {
+                    int py=y+dy;
+                    if(py<5 || py>251)continue;
+                    if(safeFloor(world,x+dx,py,z+dz)) {
+                        teleport(player,world,x+dx+0.5,py,z+dz+0.5);
+                        return;
+                    }
+                }
             }
-            if (playerData != null && playerData != NO_METHOD)
-                invoke(playerData,new String[]{"func_74757_a","putBoolean"},"DeadsModCompassGiven",true);
         }
+        // No natural opening: place a small indestructible-looking obsidian landing and
+        // guarantee a 3-block-high non-suffocating room rather than spawn in solid terrain.
+        int py=Math.max(90,Math.min(241,y+10));
+        Object floor=blockState("minecraft:obsidian"), air=blockState("minecraft:air");
+        if(floor==null || air==null)throw new IllegalStateException("Spawn platform blocks unavailable");
+        for(int dx=-2;dx<=2;dx++)for(int dz=-2;dz<=2;dz++) {
+            setBlock(world,blockPos(x+dx,py-1,z+dz),floor);
+            for(int dy=0;dy<=3;dy++)setBlock(world,blockPos(x+dx,py+dy,z+dz),air);
+        }
+        teleport(player,world,x+0.5,py,z+0.5);
+    }
+
+    private static boolean safeFloor(Object world,int x,int y,int z) throws Exception {
+        if(!airAt(world,x,y,z) || !airAt(world,x,y+1,z) || !airAt(world,x,y+2,z))return false;
+        if(airAt(world,x,y-1,z))return false;
+        Object state=invoke(world,new String[]{"func_180495_p","getBlockState"},blockPos(x,y-1,z));
+        Object block=invoke(state,new String[]{"func_177230_c","getBlock"});
+        if(block==null || block==NO_METHOD)return false;
+        Object key=invoke(Class.forName("net.minecraftforge.registries.ForgeRegistries").getField("BLOCKS").get(null),
+                new String[]{"getKey"},block);
+        String name=key==null?"":key.toString();
+        if(name.contains("water")||name.contains("lava")||name.contains("fire")||name.contains("cactus")||name.contains("leaves"))return false;
+        // Ground needs a solid collision shape; this also rejects non-solid air-like mod blocks.
+        Object material=invoke(state,new String[]{"func_185904_a","getMaterial"});
+        Object solid=invoke(material,new String[]{"func_76220_a","isSolid"});
+        if(solid!=NO_METHOD && solid!=null)return Boolean.TRUE.equals(solid);
+        return !name.contains("air") && !name.contains("water");
+    }
+    private static boolean airAt(Object world,int x,int y,int z) throws Exception {
+        Object result=invoke(world,new String[]{"func_175623_d","isAirBlock"},blockPos(x,y,z));
+        return Boolean.TRUE.equals(result);
+    }
+    private static void teleport(Object player,Object world,double x,double y,double z) throws Exception {
+        Object result=invoke(player,new String[]{"func_200619_a","teleportTo","teleport"},world,x,y,z,0f,0f);
+        if(result==NO_METHOD)invoke(player,new String[]{"func_70080_a","setPositionAndRotation"},x,y,z,0f,0f);
     }
 
     private static boolean placeTemplate(Object world, String id, int x, int y, int z) throws Exception {
