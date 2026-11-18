@@ -1,26 +1,34 @@
 {
-  "edition": "CompassFix-v2",
-  "minecraft": "1.16.5",
+  "version": "3.3",
   "loader": "Forge",
-  "modId": "horrormod",
-  "baseClientSha256": "a933c66ce2fd8b34d6287a96144f07fc0718c76c899271f6aedb542a044389fa",
-  "clientServerJarEntriesMatch": true,
-  "originalZipEntries": 1560,
-  "patchedZipEntries": 1565,
-  "editedClassFiles": 9,
-  "addedClassFiles": 5,
-  "localPatchedJarSha256": "b93d289fa3f152f2837dfdbe7bf5f87c0540a1f57745256617ccd57b6152d52f",
-  "checks": [
-    "Java 8 compilation with test stubs",
-    "Worldgen mock smoke test",
-    "Compass + persistence mock smoke test",
-    "Template call bytecode injection verified",
-    "ZIP integrity"
+  "minecraft": "1.16.5",
+  "mod_id": "horrormod",
+  "original_sha256": "a933c66ce2fd8b34d6287a96144f07fc0718c76c899271f6aedb542a044389fa",
+  "patched_sha256": "2d90e83b92854b48a17342a99fd6f9726c81f84865c09b108f8248e15225a759",
+  "original_jars_identical": true,
+  "worldgen": {
+    "bedrock_roof_disabled": true,
+    "top_slide_target": -10,
+    "dimension_has_ceiling": false,
+    "key_spacing_chunks": 20,
+    "exit_spacing_chunks": 24,
+    "maximum_terrain_slope": 10
+  },
+  "validated": [
+    "Java 8 hook compile",
+    "5 mock smoke tests",
+    "dimension JSON parser",
+    "ASM BasicVerifier on key/exit generators",
+    "JAR ZIP integrity"
   ],
-  "fullClientServerForgeRuntimeTest": false,
-  "knownLimitations": [
-    "Structures generated in old chunks are not automatically indexed",
-    "No target until a structure's template is placed after the patch",
-    "Real Forge client/server runtime still needs testing"
+  "not_validated": [
+    "Minecraft Forge 1.16.5 live client",
+    "dedicated Forge server boot",
+    "real terrain layout across a generated world"
+  ],
+  "known_limitations": [
+    "Old generated terrain and structures are not rewritten",
+    "An existing save may retain its prior dimension worldgen settings",
+    "CFR decompilation of original classes is deferred to GitHub Actions"
   ]
 }
