@@ -1,27 +1,33 @@
-# Dead's Mod Requiem v3.2 — Minecraft Forge 1.16.5
+# Dead’s Mod Requiem v3.3 — Forge 1.16.5
 
-**Experimental client/server JAR** based on user-provided original Dead's Mod. Keep only one `horrormod` JAR installed on each side, and back up your world before updating.
+Universal client/server JAR. Mod ID remains `horrormod` to preserve save compatibility.
 
-## Fixes in v3.2
+## Surface-generation fix
 
-**Dungeons on bedrock:** The Dead Dimension has a 128-block Nether-like noise generator and an upper bedrock ceiling. The v3.1 `OCEAN_FLOOR_WG - 4` height strategy incorrectly placed key/exit dungeons on that roof. v3.2 confines **new** key and exit structures to Y=20..112 (including their NBT heights/offsets), below the roof and above the lower bedrock. Existing structures remain unchanged; test in *new chunks*.
+The original Dead Dimension is a **128-block Nether-like noise generator with an upper bedrock roof**. Previous v3.1/v3.2 versions used that heightmap or fixed Y, so the two unique dungeons could appear on the bedrock roof or be buried below it.
 
-**White silhouette not visible:** Replaced direct OpenGL immediate-mode lines with Forge 1.16.5 RenderWorldLastEvent + MatrixStack + Tessellator POSITION_COLOR buffer. The renderer disables depth test so the outline can be drawn through terrain, restores render state, and submits the original NBT-derived contour only when a marked compass is held and its actual target is within 128 blocks. Also fixed a potentially ambiguous reflective Forge event-bus registration of static handlers.
+v3.3 changes only **new terrain generation in the Dead Dimension**:
 
-**Safe spawning:** natural safe landing and obsidian fallback are now constrained below the dimension's upper roof (separate `/Secreat` platform retained).
+* `data/horrormod/dimension/death_dim.json`: disables the bedrock roof (`bedrock_roof_position=-10`), sets `noise.top_slide.target=-10` to make an open surface, keeps the same seed, biomes, underground materials, dungeons and other settings.
+* `data/horrormod/dimension_type/death_dim.json`: `has_ceiling=false`; remains dark (`has_skylight=false`) and otherwise unchanged.
+* Replaces the dungeon generators’ heightmap use with `SurfacePlacement.findOpenSurface`: samples nine positions across the full 16x16 NBT footprint, rejects a solid roof and very steep terrain, chooses the highest natural ground in the footprint, and respects the exit generator’s extra +2 Y offset.
+* Before placing the original templates (`keystructurenewrem.nbt`, 16x14x16; `exitdeadssss.nbt`, 16x12x16), fills a native-block foundation under voids and clears obstructions inside the model and a small access margin.
+* If no exposed, safe site is available, **do not generate a dungeon at that candidate**, rather than bury it. Dungeon-frequency grid (20 chunks key, 24 chunks exit), stored locations and both compass modes are preserved. The previous cosmetic white outline code is unchanged.
 
-Preserved: right-click **key ↔ exit** modes, two compass sprite sets, automatic compass issue, persisted actual structure records, worldgen spacing 20x20 key / 24x24 exit chunks.
+### Save compatibility
 
-## Files and building
+**Back up your world first.** Terrain and structures in generated chunks remain unchanged; installing a new JAR does not move old buildings or open up an existing bedrock roof. For a clean test, create a **new world** with v3.3, or re-create just the Dead Dimension after backing up that dimension and its player data. Existing saves may preserve their dimension generator settings, in which case unexplored chunks can still use the old roof; no automatic migration is attempted. Terrain borders between an old and a new generator may look abrupt.
 
-- `src/main/java/net/mcreator/horrormod/unified/`: patch source (WorldgenPolicy, DeadHooks, CompassEvents, ClientOutline, StructureRecords).
-- `tools/PatchJar.java`: ASM patcher against the **original** Forge 1.16.5 mod JAR.
-- `tools/structure_mesh.py`, `tools/generate_compass_assets.py`: generate outlines and sprites from NBT/resource definitions.
-- `tests/`: mock-only Java 8 smoke tests, not real Minecraft test runs.
-- `.github/workflows/build.yml`: reconstructs original Java with CFR, compiles, patches and packages JAR + sources.
+Use only this one `horrormod` JAR on each client/server. Requires Minecraft Forge 1.16.5 and Java 8 at runtime.
 
-**GitHub Actions:** To build, create Release `original-input-v1` with original client JAR renamed to `original.jar`. This public repository does not upload the original binary, which contains third-party audio. Prefer changing repository visibility to Private before distributing it.
+## Build
 
-## Test status and limitations
+The repo contains only original patch source, not third-party mod audio. GitHub Actions reads **original.jar** from the GitHub Release tagged `original-input-v1` and validates its SHA-256 before building. Keep that release private or secure the rights to the audio before distributing it publicly. `.github/workflows/build.yml` also runs Java 8 mock smoke tests, parses the dimension JSON, generates the compass assets and extracts decompiled Java files via CFR.
 
-Passed locally: JDK 21 compiler targeting Java 8; four mock tests for worldgen position, compass state, event subscription and outline vertex submission; ASM patch; archive integrity. **Not yet verified in a live Forge 1.16.5 client or dedicated server** or with shaders. If the outline remains missing, send `.minecraft/logs/latest.log` containing `[Requiem]`, and test holding the marked compass with a *newly registered* dungeon in range. Old unindexed structures do not gain contour targets automatically.
+`build_windows.bat` builds the modified JAR from the original user-provided JAR using JDK 21. The new JAR targets Java 8.
+
+## Testing
+
+Local: Java 8 compilation, mock tests for worldgen, compasses, safe spawn, renderer and new exposed-surface placement, ASM bytecode verification of both patched generator methods, ZIP integrity, and JSON consistency validation.
+
+**NOT YET TESTED:** Actual launch of Minecraft Forge 1.16.5, dedicated server, or a real world. No guarantee about exact world terrain before that test.
