@@ -4,6 +4,7 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.List;
+import java.util.ArrayList;
 
 /** Java-8 runtime hooks added to original class files by PatchJar. No side-only references. */
 public final class DeadHooks {
@@ -19,6 +20,7 @@ public final class DeadHooks {
             if (player == null) return;
             Object world = WorldgenPolicy.field(player, "field_70170_p", "world");
             if (!isServerWorld(world) || !DEAD.equals(dimension(world))) return;
+            try { StructureRecords.flush(world); } catch (Exception e) { warn(e); }
             Object ticks = WorldgenPolicy.field(player, "field_70173_aa", "ticksExisted");
             if (!(ticks instanceof Number) || ((Number) ticks).intValue() % 80 != 0) return;
             giveOrUpdate(player, world);
@@ -30,7 +32,10 @@ public final class DeadHooks {
             if (!DEAD.equals(dimensionKey(invoke(event, "getTo")))) return;
             Object player = invoke(event, "getPlayer");
             Object world = WorldgenPolicy.field(player, "field_70170_p", "world");
-            if (isServerWorld(world)) giveOrUpdate(player, world);
+            if (isServerWorld(world)) {
+                try {StructureRecords.flush(world);} catch(Exception e) {warn(e);}
+                giveOrUpdate(player, world);
+            }
         } catch (Exception e) { warn(e); }
     }
 
@@ -79,45 +84,65 @@ public final class DeadHooks {
         Object main = WorldgenPolicy.field(inventory, "field_70462_a", "mainInventory");
         if (!(main instanceof List)) return;
         List<?> items = (List<?>)main;
+        List<Object> all = new ArrayList<Object>(items);
+        Object offhand = WorldgenPolicy.field(inventory, "field_184439_c", "offHandInventory");
+        if (offhand instanceof List) all.addAll((List<?>)offhand);
+        Object armor = WorldgenPolicy.field(inventory, "field_70460_b", "armorInventory");
+        if (armor instanceof List) all.addAll((List<?>)armor);
         Object compass = null;
-        for (Object stack : items) {
+        for (Object stack : all) {
             if (stack == null) continue;
             Object tag = invoke(stack, new String[]{"func_77978_p", "getTag"});
             if (tag == null || tag == NO_METHOD) continue;
             Object flag = invoke(tag, new String[]{"func_74767_n", "getBoolean"}, MARKER);
             if (Boolean.TRUE.equals(flag)) { compass = stack; break; }
         }
+        Object playerData = invoke(player, new String[]{"getPersistentData"});
+        if (compass == null && playerData != null && playerData != NO_METHOD
+                && Boolean.TRUE.equals(invoke(playerData,new String[]{"func_74767_n","getBoolean"}, "DeadsModCompassGiven"))) {
+            return; // Grant once, not every 80 ticks after the player drops it.
+        }
         if (compass == null) {
             Object item = registry("ITEMS", "minecraft:compass");
             if (item == null) return;
-            Class<?> itemClass = Class.forName("net.minecraft.item.Item");
+            Class<?> itemProvider = Class.forName("net.minecraft.util.IItemProvider");
             Class<?> stackClass = Class.forName("net.minecraft.item.ItemStack");
-            compass = stackClass.getConstructor(itemClass).newInstance(item);
+            compass = stackClass.getConstructor(itemProvider).newInstance(item);
         }
         Object tag = invoke(compass, new String[]{"func_196082_o", "getOrCreateTag"});
         if (tag == NO_METHOD || tag == null) return;
         invoke(tag, new String[]{"func_74757_a", "putBoolean"}, MARKER, true);
         invoke(tag, new String[]{"func_74757_a", "putBoolean"}, "LodestoneTracked", false);
-        invoke(tag, new String[]{"func_74778_a", "putString"}, "LodestoneDimension", DEAD);
-        int[] coords = WorldgenPolicy.nearest(WorldgenPolicy.seed(world),
-            (int)Math.floor((Double)invoke(player, new String[]{"func_226277_ct_", "getPosX"})),
-            (int)Math.floor((Double)invoke(player, new String[]{"func_226281_cx_", "getPosZ"})));
-        Object pos = Class.forName("net.minecraft.nbt.CompoundNBT").getConstructor().newInstance();
-        invoke(pos, new String[]{"func_74768_a", "putInt"}, "X", coords[0]);
-        invoke(pos, new String[]{"func_74768_a", "putInt"}, "Y", coords[1]);
-        invoke(pos, new String[]{"func_74768_a", "putInt"}, "Z", coords[2]);
-        invoke(tag, new String[]{"func_218657_a", "put"}, "LodestonePos", pos);
+        int x = (int)Math.floor(((Number)invoke(player, new String[]{"func_226277_ct_", "getPosX"})).doubleValue());
+        int z = (int)Math.floor(((Number)invoke(player, new String[]{"func_226281_cx_", "getPosZ"})).doubleValue());
+        StructureRecords.Site located = null;
+        try {located = StructureRecords.nearest(world, x, z);} catch(Exception e) {warn(e);}
+        if (located != null) {
+            invoke(tag, new String[]{"func_74778_a", "putString"}, "LodestoneDimension", DEAD);
+            Object pos = Class.forName("net.minecraft.nbt.CompoundNBT").getConstructor().newInstance();
+            invoke(pos, new String[]{"func_74768_a", "putInt"}, "X", located.x);
+            invoke(pos, new String[]{"func_74768_a", "putInt"}, "Y", located.y);
+            invoke(pos, new String[]{"func_74768_a", "putInt"}, "Z", located.z);
+            invoke(tag, new String[]{"func_218657_a", "put"}, "LodestonePos", pos);
+        } else {
+            // Never point at an ungenerated or nonexistent location.
+            invoke(tag, new String[]{"func_82580_o", "remove"}, "LodestonePos");
+            invoke(tag, new String[]{"func_82580_o", "remove"}, "LodestoneDimension");
+        }
         Object display = Class.forName("net.minecraft.nbt.CompoundNBT").getConstructor().newInstance();
-        invoke(display, new String[]{"func_74778_a", "putString"}, "Name", "{\"text\":\"Компас мёртвых\",\"color\":\"dark_purple\",\"italic\":false}");
+        String name = located == null ? "Компас мёртвых (цель не найдена)" : "Компас мёртвых";
+        invoke(display, new String[]{"func_74778_a", "putString"}, "Name",
+            "{\"text\":\"" + name + "\",\"color\":\"dark_purple\",\"italic\":false}");
         invoke(tag, new String[]{"func_218657_a", "put"}, "display", display);
-        // Never auto-add a second compass if one with our marker exists.
         boolean present = false;
-        for (Object stack : items) if (stack == compass) {present = true;break;}
+        for (Object stack : all) if (stack == compass) {present = true;break;}
         if (!present) {
             Object inserted = invoke(inventory, new String[]{"func_70441_a", "addItemStackToInventory"}, compass);
             if (!Boolean.TRUE.equals(inserted)) {
                 invoke(player, new String[]{"func_71019_a", "dropItem"}, compass, false);
             }
+            if (playerData != null && playerData != NO_METHOD)
+                invoke(playerData,new String[]{"func_74757_a","putBoolean"},"DeadsModCompassGiven",true);
         }
     }
 
