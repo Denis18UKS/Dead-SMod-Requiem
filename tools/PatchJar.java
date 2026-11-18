@@ -73,6 +73,19 @@ public final class PatchJar implements Opcodes {
                 if (!hit) throw new IllegalStateException("Missing worldgen method: "+path);
             }
         }
+        if (path.equals(c+"HorrormodMod.class")) {
+            boolean installed=false;
+            for (MethodNode m:node.methods) if (m.name.equals("<init>") && m.desc.equals("()V")) {
+                for (AbstractInsnNode ins:m.instructions.toArray()) if (ins.getOpcode()==RETURN) {
+                    InsnList hook=new InsnList();
+                    hook.add(new MethodInsnNode(INVOKESTATIC,HOOK,"bootstrap","()V",false));
+                    m.instructions.insertBefore(ins,hook);
+                    installed=true;
+                }
+            }
+            if(!installed)throw new IllegalStateException("Cannot install Requiem event subscriber bootstrap");
+            modified=true;
+        }
         if (path.equals(c+"world/dimension/SDDimension.class")) {
             insertAfterOriginal(node, "onPlayerChangedDimensionEvent", HOOK, "onSecretDimensionEntry");
             modified = true;
@@ -135,12 +148,18 @@ public final class PatchJar implements Opcodes {
         if (args.length != 3) throw new IllegalArgumentException("Usage: PatchJar <original.jar> <classes_dir> <out.jar>");
         Path original=Paths.get(args[0]), classFolder=Paths.get(args[1]), result=Paths.get(args[2]);
         Set<String> altered=new TreeSet<>();
+        Set<String> overwritten=new HashSet<>();
+        Path resources=Paths.get("src/main/resources");
+        if(Files.isDirectory(resources))try(java.util.stream.Stream<Path> files=Files.walk(resources)){
+            files.filter(Files::isRegularFile).forEach(file -> overwritten.add(resources.relativize(file).toString().replace('\\','/')));
+        }
         Files.createDirectories(result.toAbsolutePath().getParent());
         try (JarFile input=new JarFile(original.toFile()); JarOutputStream output=new JarOutputStream(Files.newOutputStream(result))) {
             Enumeration<JarEntry> all=input.entries();
             while (all.hasMoreElements()) {
                 JarEntry entry=all.nextElement();
                 String path=entry.getName();
+                if (overwritten.contains(path))continue;
                 if (path.startsWith("META-INF/") && (path.endsWith(".SF") || path.endsWith(".RSA") || path.endsWith(".DSA"))) continue;
                 byte[] data;
                 try (InputStream in=input.getInputStream(entry)) {data=readAll(in);}
@@ -160,6 +179,14 @@ public final class PatchJar implements Opcodes {
                 output.write(data);
                 output.closeEntry();
             }
+            if(Files.isDirectory(resources))try(java.util.stream.Stream<Path> files=Files.walk(resources)){
+                for(Path file:(Iterable<Path>)files.filter(Files::isRegularFile)::iterator){
+                    String name=resources.relativize(file).toString().replace('\\','/');
+                    JarEntry newEntry=new JarEntry(name);newEntry.setTime(0L);
+                    output.putNextEntry(newEntry);output.write(Files.readAllBytes(file));output.closeEntry();
+                    altered.add(name);
+                }
+            }
             Path packagePath=classFolder.resolve("net/mcreator/horrormod/unified");
             try (DirectoryStream<Path> files=Files.newDirectoryStream(packagePath,"*.class")) {
                 for (Path file:files) {
@@ -173,7 +200,7 @@ public final class PatchJar implements Opcodes {
         }
         System.out.println("Created " + result + " with patches/additions:");
         for (String entry:altered) System.out.println("  " + entry);
-        if (altered.size()!=14) throw new IllegalStateException("Expected 14 touched class files, got "+altered.size());
+        if (altered.size()<145) throw new IllegalStateException("Expected v3 hooks and texture assets, got only "+altered.size()+" patched entries");
     }
     private static byte[] readAll(InputStream input) throws IOException {
         ByteArrayOutputStream out=new ByteArrayOutputStream();
