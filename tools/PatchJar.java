@@ -38,6 +38,26 @@ public final class PatchJar implements Opcodes {
                     added.add(accepted);
                     added.add(new FrameNode(F_SAME, 0, null, 0, null));
                     method.instructions.insert(added);
+                    if (entry.getValue().equals("key") || entry.getValue().equals("exit")) {
+                        int calls = 0;
+                        for (AbstractInsnNode ins : method.instructions.toArray()) {
+                            if (!(ins instanceof MethodInsnNode)) continue;
+                            MethodInsnNode call = (MethodInsnNode) ins;
+                            if (call.owner.equals("net/minecraft/world/gen/feature/template/Template")
+                                    && call.name.equals("func_237144_a_")) {
+                                InsnList recorded = new InsnList();
+                                recorded.add(new VarInsnNode(ALOAD, 1));
+                                recorded.add(new VarInsnNode(ALOAD, 17)); // Actual NBT placement origin
+                                recorded.add(new LdcInsnNode(entry.getValue()));
+                                recorded.add(new MethodInsnNode(INVOKESTATIC,
+                                        "net/mcreator/horrormod/unified/StructureRecords", "placed",
+                                        "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/String;)V", false));
+                                method.instructions.insert(ins, recorded);
+                                calls++;
+                            }
+                        }
+                        if (calls != 1) throw new IllegalStateException("Expected one actual template placement in " + path + ", got " + calls);
+                    }
                     if (!entry.getValue().equals("pumpkin")) {
                         int chance = 0;
                         for (AbstractInsnNode ins : method.instructions.toArray()) {
@@ -153,7 +173,7 @@ public final class PatchJar implements Opcodes {
         }
         System.out.println("Created " + result + " with patches/additions:");
         for (String entry:altered) System.out.println("  " + entry);
-        if (altered.size()!=11) throw new IllegalStateException("Expected 11 touched class files, got "+altered.size());
+        if (altered.size()!=14) throw new IllegalStateException("Expected 14 touched class files, got "+altered.size());
     }
     private static byte[] readAll(InputStream input) throws IOException {
         ByteArrayOutputStream out=new ByteArrayOutputStream();
