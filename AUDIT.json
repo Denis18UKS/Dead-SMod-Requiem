@@ -1,0 +1,9 @@
+{
+  "original_jars_identical": true,
+  "original_entries": 1508,
+  "modified_classes": 9,
+  "added_classes": 2,
+  "sha256_original": "a933c66ce2fd8b34d6287a96144f07fc0718c76c899271f6aedb542a044389fa",
+  "sha256_updated_local": "925f9a424fe5cefe2aa53ee625a959c822ec1317625b87cc419f55fd9c10fd37",
+  "test_status": "Java8 compiled and mock tests passed; real Forge client and dedicated server NOT tested"
+}
