@@ -44,7 +44,8 @@ public final class TestPolicy {
             require(net.mcreator.horrormod.unified.WorldgenPolicy.biomeMatches("horrormod:dead_woods_biome",biome),"exit wrong biome " + biome);
         }
         require(!net.mcreator.horrormod.unified.WorldgenPolicy.biomeMatches("horrormod:death","minecraft:plains"),"dungeon in non-dead biome");
-        require(net.mcreator.horrormod.unified.WorldgenPolicy.chooseStructureY(new java.util.Random(1),8,64)==60,"incorrect surface-relative Y");
+        require(net.mcreator.horrormod.unified.WorldgenPolicy.chooseStructureY(new java.util.Random(1),8,128)==98,"key origin must fit below bedrock ceiling");
+        check(net.mcreator.horrormod.unified.WorldgenPolicy.chooseExitStructureY(new java.util.Random(1),8,128)==98,"exit origin must fit below ceiling");
         java.util.Map<String,Object> deps=new java.util.HashMap<String,Object>();
         for(String key:new String[]{"world","x","y","z"})deps.put(key,0);
         require(net.mcreator.horrormod.unified.WorldgenPolicy.allowDeathDungeon(deps),"valid structure rejected");
