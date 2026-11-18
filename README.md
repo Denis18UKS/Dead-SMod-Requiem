@@ -1,21 +1,27 @@
-# Dead's Mod Requiem v3.1 (Forge 1.16.5)
+# Dead's Mod Requiem v3.2 — Minecraft Forge 1.16.5
 
-Experimental compatibility update: more discoverable key/exit dungeons in the Dead Dimension.
+**Experimental client/server JAR** based on user-provided original Dead's Mod. Keep only one `horrormod` JAR installed on each side, and back up your world before updating.
 
-## Dungeon frequency fix
-- Key: 96 x 96 chunk candidate region in v3 -> **20 x 20** in v3.1.
-- Exit: 112 x 112 in v3 -> **24 x 24** in v3.1.
-- Both dungeon types can now generate in either `horrormod:death` or `horrormod:dead_woods_biome` (the actual dead-dimension biomes).
-- The original generator rejected almost all candidates by asking for a specific custom block at a random altitude. The patched generator uses the already-verified Dead Dimension and biome checks instead and chooses height near the terrain surface.
-- Overworld and other structure spacing unchanged.
+## Fixes in v3.2
 
-**IMPORTANT:** Already-generated chunks do NOT regenerate. If your save's Dead Dimension has been explored, visit *new* chunks after installing the update. The compass only knows about structures whose template placement was recorded by the patch; it will not falsely target a calculated but ungenerated dungeon. Candidate grids do not guarantee one structure per region, because the biome can reject a candidate.
+**Dungeons on bedrock:** The Dead Dimension has a 128-block Nether-like noise generator and an upper bedrock ceiling. The v3.1 `OCEAN_FLOOR_WG - 4` height strategy incorrectly placed key/exit dungeons on that roof. v3.2 confines **new** key and exit structures to Y=20..112 (including their NBT heights/offsets), below the roof and above the lower bedrock. Existing structures remain unchanged; test in *new chunks*.
 
-## Compass and gameplay
-Preserves v3's right-click key/exit selection, two compass item models, white contour outline, and safe Dead Dimension entrance. The white contour appears only after the destination has actually been recorded.
+**White silhouette not visible:** Replaced direct OpenGL immediate-mode lines with Forge 1.16.5 RenderWorldLastEvent + MatrixStack + Tessellator POSITION_COLOR buffer. The renderer disables depth test so the outline can be drawn through terrain, restores render state, and submits the original NBT-derived contour only when a marked compass is held and its actual target is within 128 blocks. Also fixed a potentially ambiguous reflective Forge event-bus registration of static handlers.
 
-## Build (GitHub Actions)
-Original source jar is not committed, since it includes third-party audio. To trigger Actions, create release `original-input-v1` with asset named `original.jar` containing the **original** Dead's Mod Client JAR. Prefer making the repo private before uploading such a binary. This workflow checks its SHA256, generates the derived resources and emits the JAR plus a source ZIP. See `.github/workflows/build.yml`.
+**Safe spawning:** natural safe landing and obsidian fallback are now constrained below the dimension's upper roof (separate `/Secreat` platform retained).
 
-## Testing and risk
-Java 8 compatibility tests (using test-only Minecraft stubs), ASM bytecode inspection, and ZIP integrity have been checked locally. A full Minecraft Forge client and dedicated-server startup test **has not** been performed; make a backup of any existing world before installing.
+Preserved: right-click **key ↔ exit** modes, two compass sprite sets, automatic compass issue, persisted actual structure records, worldgen spacing 20x20 key / 24x24 exit chunks.
+
+## Files and building
+
+- `src/main/java/net/mcreator/horrormod/unified/`: patch source (WorldgenPolicy, DeadHooks, CompassEvents, ClientOutline, StructureRecords).
+- `tools/PatchJar.java`: ASM patcher against the **original** Forge 1.16.5 mod JAR.
+- `tools/structure_mesh.py`, `tools/generate_compass_assets.py`: generate outlines and sprites from NBT/resource definitions.
+- `tests/`: mock-only Java 8 smoke tests, not real Minecraft test runs.
+- `.github/workflows/build.yml`: reconstructs original Java with CFR, compiles, patches and packages JAR + sources.
+
+**GitHub Actions:** To build, create Release `original-input-v1` with original client JAR renamed to `original.jar`. This public repository does not upload the original binary, which contains third-party audio. Prefer changing repository visibility to Private before distributing it.
+
+## Test status and limitations
+
+Passed locally: JDK 21 compiler targeting Java 8; four mock tests for worldgen position, compass state, event subscription and outline vertex submission; ASM patch; archive integrity. **Not yet verified in a live Forge 1.16.5 client or dedicated server** or with shaders. If the outline remains missing, send `.minecraft/logs/latest.log` containing `[Requiem]`, and test holding the marked compass with a *newly registered* dungeon in range. Old unindexed structures do not gain contour targets automatically.
