@@ -1,4 +1,4 @@
-name: Build Dead's Mod Requiem v3.2 (Forge 1.16.5)
+name: Build Dead's Mod Requiem v3.3 (Forge 1.16.5)
 
 on:
   workflow_dispatch:
@@ -42,19 +42,21 @@ jobs:
       - name: Test placement, safe spawn, compass mode and persistence
         run: |
           set -euo pipefail
-          javac --release 8 -encoding UTF-8 -cp build/classes -d build/test-classes tests/TestPolicy.java tests/RepairSmokeTest.java tests/CompassV3SmokeTest.java tests/OutlineV32SmokeTest.java
+          javac --release 8 -encoding UTF-8 -cp build/classes -d build/test-classes tests/TestPolicy.java tests/RepairSmokeTest.java tests/CompassV3SmokeTest.java tests/OutlineV32SmokeTest.java tests/SurfaceV33Test.java
           java -cp build/classes:build/test-classes TestPolicy
           java -cp build/classes:build/test-classes RepairSmokeTest
           java -cp build/classes:build/test-classes CompassV3SmokeTest
           java -cp build/classes:build/test-classes:src/main/resources OutlineV32SmokeTest
+          java -cp build/classes:build/test-classes SurfaceV33Test
+          python3 tests/validate_dimension_v33.py
       - name: Patch and verify JAR
         run: |
           set -euo pipefail
-          java --add-exports java.base/jdk.internal.org.objectweb.asm=ALL-UNNAMED --add-exports java.base/jdk.internal.org.objectweb.asm.tree=ALL-UNNAMED -cp build/patcher-classes PatchJar original.jar build/classes build/DeadsMod-Requiem-v3.2-Forge-1.16.5.jar
-          jar tf build/DeadsMod-Requiem-v3.2-Forge-1.16.5.jar | grep -q 'net/mcreator/horrormod/unified/ClientOutline.class'
-          jar tf build/DeadsMod-Requiem-v3.2-Forge-1.16.5.jar | grep -q 'assets/minecraft/models/item/compass.json'
-          unzip -tq build/DeadsMod-Requiem-v3.2-Forge-1.16.5.jar | tail -2
-          sha256sum build/DeadsMod-Requiem-v3.2-Forge-1.16.5.jar
+          java --add-exports java.base/jdk.internal.org.objectweb.asm=ALL-UNNAMED --add-exports java.base/jdk.internal.org.objectweb.asm.tree=ALL-UNNAMED -cp build/patcher-classes PatchJar original.jar build/classes build/DeadsMod-Requiem-v3.3-Forge-1.16.5.jar
+          jar tf build/DeadsMod-Requiem-v3.3-Forge-1.16.5.jar | grep -q 'net/mcreator/horrormod/unified/ClientOutline.class'
+          jar tf build/DeadsMod-Requiem-v3.3-Forge-1.16.5.jar | grep -q 'assets/minecraft/models/item/compass.json'
+          unzip -tq build/DeadsMod-Requiem-v3.3-Forge-1.16.5.jar | tail -2
+          sha256sum build/DeadsMod-Requiem-v3.3-Forge-1.16.5.jar
       - name: Reconstruct original Java classes using CFR
         run: |
           set -euo pipefail
@@ -70,13 +72,13 @@ jobs:
           cp README.md build/source-bundle/
           cp -r build/decompiled-original build/source-bundle/
           cp original.jar build/source-bundle/
-          (cd build/source-bundle && zip -qr ../DeadsMod-Requiem-v3.2-Sources.zip .)
+          (cd build/source-bundle && zip -qr ../DeadsMod-Requiem-v3.3-Sources.zip .)
       - name: Publish build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: DeadsMod-Requiem-v3.2-build
+          name: DeadsMod-Requiem-v3.3-build
           path: |
-            build/DeadsMod-Requiem-v3.2-Forge-1.16.5.jar
-            build/DeadsMod-Requiem-v3.2-Sources.zip
+            build/DeadsMod-Requiem-v3.3-Forge-1.16.5.jar
+            build/DeadsMod-Requiem-v3.3-Sources.zip
           if-no-files-found: error
           retention-days: 30
