@@ -1,9 +1,26 @@
 {
-  "original_jars_identical": true,
-  "original_entries": 1508,
-  "modified_classes": 9,
-  "added_classes": 2,
-  "sha256_original": "a933c66ce2fd8b34d6287a96144f07fc0718c76c899271f6aedb542a044389fa",
-  "sha256_updated_local": "925f9a424fe5cefe2aa53ee625a959c822ec1317625b87cc419f55fd9c10fd37",
-  "test_status": "Java8 compiled and mock tests passed; real Forge client and dedicated server NOT tested"
+  "edition": "CompassFix-v2",
+  "minecraft": "1.16.5",
+  "loader": "Forge",
+  "modId": "horrormod",
+  "baseClientSha256": "a933c66ce2fd8b34d6287a96144f07fc0718c76c899271f6aedb542a044389fa",
+  "clientServerJarEntriesMatch": true,
+  "originalZipEntries": 1560,
+  "patchedZipEntries": 1565,
+  "editedClassFiles": 9,
+  "addedClassFiles": 5,
+  "localPatchedJarSha256": "b93d289fa3f152f2837dfdbe7bf5f87c0540a1f57745256617ccd57b6152d52f",
+  "checks": [
+    "Java 8 compilation with test stubs",
+    "Worldgen mock smoke test",
+    "Compass + persistence mock smoke test",
+    "Template call bytecode injection verified",
+    "ZIP integrity"
+  ],
+  "fullClientServerForgeRuntimeTest": false,
+  "knownLimitations": [
+    "Structures generated in old chunks are not automatically indexed",
+    "No target until a structure's template is placed after the patch",
+    "Real Forge client/server runtime still needs testing"
+  ]
 }
