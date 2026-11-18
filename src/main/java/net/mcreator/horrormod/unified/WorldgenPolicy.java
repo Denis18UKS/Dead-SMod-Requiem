@@ -116,6 +116,41 @@ public final class WorldgenPolicy {
         return x ^ (x >>> 31);
     }
 
+
+    public static Object invoke(Object target, String[] names, Object... args) throws Exception {
+        if (target == null) return null;
+        for (Class<?> c = target.getClass(); c != null; c = c.getSuperclass()) {
+            for (Method m : c.getDeclaredMethods()) {
+                if (m.getParameterCount() != args.length) continue;
+                boolean named = false;
+                for (String name : names) if (name.equals(m.getName())) named = true;
+                if (!named) continue;
+                Class<?>[] types = m.getParameterTypes();
+                boolean compatible = true;
+                for (int i = 0; i < types.length; i++) {
+                    if (args[i] == null) continue;
+                    Class<?> type = types[i].isPrimitive() ? primitiveBox(types[i]) : types[i];
+                    if (!type.isAssignableFrom(args[i].getClass())) {compatible = false; break;}
+                }
+                if (!compatible) continue;
+                m.setAccessible(true);
+                return m.invoke(target, args);
+            }
+        }
+        return null;
+    }
+    private static Class<?> primitiveBox(Class<?> t) {
+        if (t==int.class) return Integer.class;
+        if (t==long.class) return Long.class;
+        if (t==float.class) return Float.class;
+        if (t==double.class) return Double.class;
+        if (t==boolean.class) return Boolean.class;
+        if (t==byte.class) return Byte.class;
+        if (t==short.class) return Short.class;
+        if (t==char.class) return Character.class;
+        return t;
+    }
+
     private static volatile boolean warned;
     public static void logOnce(String label, Exception e) {
         if (!warned) { warned = true; System.err.println("[Dead's Mod Unified] " + label + ": " + e); }
