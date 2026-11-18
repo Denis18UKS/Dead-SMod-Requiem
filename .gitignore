@@ -1,0 +1,6 @@
+/build/
+/classes/
+/patcher-classes/
+/.gradle/
+original.jar
+*.log
