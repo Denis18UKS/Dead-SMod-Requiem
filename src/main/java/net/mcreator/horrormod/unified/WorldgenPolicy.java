@@ -18,11 +18,33 @@ public final class WorldgenPolicy {
     public static final String PUMPKIN = "pumpkin";
 
     public static int spacing(String id) {
-        if (KEY.equals(id)) return 96;
-        if (EXIT.equals(id)) return 112;
+        if (KEY.equals(id)) return 20;
+        if (EXIT.equals(id)) return 24;
         if (OVERWORLD_DUNGEON.equals(id)) return 48;
         if (SPHERE.equals(id)) return 96;
         return 0;
+    }
+
+    /** Both native biomes belong to the Dead Dimension, so either dungeon may generate in both. */
+    public static boolean biomeMatches(Object configured, Object current) {
+        if (configured == null || current == null) return false;
+        String actual = current.toString();
+        if (!configured.toString().startsWith("horrormod:")) return configured.equals(current);
+        return "horrormod:death".equals(actual) || "horrormod:dead_woods_biome".equals(actual);
+    }
+
+    /** Keep a recognizable portion of each NBT dungeon above the local terrain. */
+    public static int chooseStructureY(java.util.Random rng, int minY, int terrainY) {
+        return Math.max(minY, Math.min(225, terrainY - 4));
+    }
+
+    /** The original MCreator procedure checked one random block for deathblock,
+     * which rejected nearly all otherwise valid dungeon positions. The caller
+     * already checks the death dimension and is registered only in allowed biomes. */
+    public static boolean allowDeathDungeon(Object dependencies) {
+        if (!(dependencies instanceof java.util.Map)) return false;
+        java.util.Map<?,?> m = (java.util.Map<?,?>) dependencies;
+        return m.containsKey("world") && m.containsKey("x") && m.containsKey("y") && m.containsKey("z");
     }
 
     public static boolean shouldPlace(Object reader, Object blockPos, String id) {
