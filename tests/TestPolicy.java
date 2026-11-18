@@ -37,6 +37,19 @@ public final class TestPolicy {
         require(!net.mcreator.horrormod.unified.WorldgenPolicy.shouldPlace(reader,new FakePos(0,0),"pumpkin"),"Pumpkin structure should not generate randomly");
         int[] near=net.mcreator.horrormod.unified.WorldgenPolicy.nearest(seed,0,0);
         require(near.length==3 && near[1]==70,"Invalid nearest target");
-        System.out.println("Worldgen policy smoke tests passed.");
+        require(net.mcreator.horrormod.unified.WorldgenPolicy.spacing("key")==20,"key dungeons are still too rare");
+        require(net.mcreator.horrormod.unified.WorldgenPolicy.spacing("exit")==24,"exit dungeons are still too rare");
+        for(String biome:new String[]{"horrormod:death","horrormod:dead_woods_biome"}){
+            require(net.mcreator.horrormod.unified.WorldgenPolicy.biomeMatches("horrormod:death",biome),"key wrong biome " + biome);
+            require(net.mcreator.horrormod.unified.WorldgenPolicy.biomeMatches("horrormod:dead_woods_biome",biome),"exit wrong biome " + biome);
+        }
+        require(!net.mcreator.horrormod.unified.WorldgenPolicy.biomeMatches("horrormod:death","minecraft:plains"),"dungeon in non-dead biome");
+        require(net.mcreator.horrormod.unified.WorldgenPolicy.chooseStructureY(new java.util.Random(1),8,64)==60,"incorrect surface-relative Y");
+        java.util.Map<String,Object> deps=new java.util.HashMap<String,Object>();
+        for(String key:new String[]{"world","x","y","z"})deps.put(key,0);
+        require(net.mcreator.horrormod.unified.WorldgenPolicy.allowDeathDungeon(deps),"valid structure rejected");
+        deps.remove("world");
+        require(!net.mcreator.horrormod.unified.WorldgenPolicy.allowDeathDungeon(deps),"invalid dependencies accepted");
+        System.out.println("PASS: v3.1 increased density, both dead biomes and better ground choice");
     }
 }
