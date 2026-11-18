@@ -39,14 +39,51 @@ public final class PatchJar implements Opcodes {
                     added.add(new FrameNode(F_SAME, 0, null, 0, null));
                     method.instructions.insert(added);
                     if (entry.getValue().equals("key") || entry.getValue().equals("exit")) {
+                        // The previous versions used a fixed Y below the bedrock roof.
+                        // Replace the heightmap query with an actual exposed surface
+                        // search, and reject regions that still have a solid roof.
+                        int heightmapCalls = 0;
+                        for (AbstractInsnNode ins : method.instructions.toArray()) {
+                            if (!(ins instanceof MethodInsnNode)) continue;
+                            MethodInsnNode call=(MethodInsnNode)ins;
+                            if (call.owner.equals("net/minecraft/world/ISeedReader")
+                                    && call.name.equals("func_201676_a")
+                                    && call.desc.equals("(Lnet/minecraft/world/gen/Heightmap$Type;II)I")) {
+                                method.instructions.insertBefore(call,new LdcInsnNode(entry.getValue()));
+                                call.setOpcode(INVOKESTATIC);
+                                call.owner="net/mcreator/horrormod/unified/SurfacePlacement";
+                                call.name="findOpenSurface";
+                                call.desc="(Ljava/lang/Object;Ljava/lang/Object;IILjava/lang/String;)I";
+                                call.itf=false;
+                                // Abort the feature (rather than creating a buried
+                                // structure) if no exposed, level terrain exists.
+                                AbstractInsnNode store=call.getNext();
+                                if (!(store instanceof VarInsnNode) || store.getOpcode()!=ISTORE
+                                        || ((VarInsnNode)store).var!=14)
+                                    throw new IllegalStateException("Unexpected surface-Y local in "+path);
+                                LabelNode safe=new LabelNode();
+                                InsnList check=new InsnList();
+                                check.add(new VarInsnNode(ILOAD,14));
+                                check.add(new InsnNode(ICONST_M1));
+                                check.add(new JumpInsnNode(IF_ICMPNE,safe));
+                                check.add(new InsnNode(ICONST_0));
+                                check.add(new InsnNode(IRETURN));
+                                check.add(safe);
+                                check.add(new FrameNode(F_SAME,0,null,0,null));
+                                method.instructions.insert(store,check);
+                                heightmapCalls++;
+                            }
+                        }
+                        if (heightmapCalls!=1)
+                            throw new IllegalStateException("Expected one heightmap lookup in "+path+", got "+heightmapCalls);
                         int surface = 0, grounds = 0;
                         for (AbstractInsnNode ins : method.instructions.toArray()) {
                             if (!(ins instanceof MethodInsnNode)) continue;
                             MethodInsnNode call = (MethodInsnNode) ins;
                             if (call.owner.equals("net/minecraft/util/math/MathHelper")
                                     && call.name.equals("func_76136_a") && call.desc.equals("(Ljava/util/Random;II)I")) {
-                                call.owner = GEN;
-                                call.name = entry.getValue().equals("exit") ? "chooseExitStructureY" : "chooseStructureY";
+                                call.owner = "net/mcreator/horrormod/unified/SurfacePlacement";
+                                call.name = "chosenY";
                                 surface++;
                             }
                             if ((call.owner.equals("net/mcreator/horrormod/procedures/TestProcedure") || call.owner.equals("net/mcreator/horrormod/procedures/TestOlegProcedure"))
@@ -61,6 +98,33 @@ public final class PatchJar implements Opcodes {
                         if (surface != 1 || grounds != 1)
                             throw new IllegalStateException("Expected one height choice and terrain gate in " + path + ", got " + surface + "/" + grounds);
 
+                        // Prepare native ground under the 16x16 floor and clear
+                        // foliage/terrain that would obscure the NBT exterior.
+                        // Insert before the original template invocation starts,
+                        // while the JVM stack is empty (after template null guard).
+                        AbstractInsnNode templateStart=null;
+                        for (AbstractInsnNode ins : method.instructions.toArray()) {
+                            if (!(ins instanceof VarInsnNode) || ins.getOpcode()!=ALOAD
+                                    || ((VarInsnNode)ins).var!=21) continue;
+                            AbstractInsnNode next=ins.getNext();
+                            if (next instanceof VarInsnNode && next.getOpcode()==ALOAD
+                                    && ((VarInsnNode)next).var==1) {templateStart=ins;break;}
+                        }
+                        if(templateStart==null) throw new IllegalStateException("Cannot locate template invocation start in "+path);
+                        InsnList prep=new InsnList();
+                        LabelNode prepared=new LabelNode();
+                        prep.add(new VarInsnNode(ALOAD,1));
+                        prep.add(new VarInsnNode(ALOAD,17));
+                        prep.add(new LdcInsnNode(entry.getValue()));
+                        prep.add(new MethodInsnNode(INVOKESTATIC,
+                             "net/mcreator/horrormod/unified/SurfacePlacement","prepare",
+                             "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/String;)Z",false));
+                        prep.add(new JumpInsnNode(IFNE,prepared));
+                        prep.add(new InsnNode(ICONST_0));
+                        prep.add(new InsnNode(IRETURN));
+                        prep.add(prepared);
+                        prep.add(new FrameNode(F_SAME,0,null,0,null));
+                        method.instructions.insertBefore(templateStart,prep);
 
                         int calls = 0;
                         for (AbstractInsnNode ins : method.instructions.toArray()) {
