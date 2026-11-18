@@ -1,0 +1,82 @@
+name: Build Dead's Mod Requiem (Forge 1.16.5)
+
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Java 8 runtime classes)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Fetch the user-provided original JAR from GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release download original-input-v1 --repo "${{ github.repository }}" --pattern original.jar --dir .
+          echo "a933c66ce2fd8b34d6287a96144f07fc0718c76c899271f6aedb542a044389fa  original.jar" | sha256sum -c -
+
+      - name: Compile Java 8 hooks and JDK 21 offline ASM patcher
+        run: |
+          set -euo pipefail
+          mkdir -p build/classes build/patcher-classes build/test-classes
+          javac --release 8 -encoding UTF-8 -d build/classes src/main/java/net/mcreator/horrormod/unified/*.java
+          javac --add-exports java.base/jdk.internal.org.objectweb.asm=ALL-UNNAMED --add-exports java.base/jdk.internal.org.objectweb.asm.tree=ALL-UNNAMED -encoding UTF-8 -d build/patcher-classes tools/PatchJar.java
+
+      - name: Check worldgen rules
+        run: |
+          set -euo pipefail
+          javac --release 8 -encoding UTF-8 -cp build/classes -d build/test-classes tests/TestPolicy.java
+          java -cp build/classes:build/test-classes TestPolicy
+
+      - name: Build single Forge 1.16.5 universal mod
+        run: |
+          set -euo pipefail
+          java --add-exports java.base/jdk.internal.org.objectweb.asm=ALL-UNNAMED --add-exports java.base/jdk.internal.org.objectweb.asm.tree=ALL-UNNAMED -cp build/patcher-classes PatchJar original.jar build/classes build/DeadsMod-Requiem-Forge-1.16.5.jar
+          jar tf build/DeadsMod-Requiem-Forge-1.16.5.jar | grep -q '^net/mcreator/horrormod/unified/DeadHooks.class$'
+          sha256sum build/DeadsMod-Requiem-Forge-1.16.5.jar
+
+      - name: Recover readable original Java classes using CFR
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 https://repo.maven.apache.org/maven2/org/benf/cfr/0.152/cfr-0.152.jar -o build/cfr.jar
+          mkdir -p build/decompiled-original
+          java -Xmx3G -jar build/cfr.jar original.jar --outputdir build/decompiled-original --silent true
+          count=$(find build/decompiled-original -name '*.java' | wc -l)
+          echo "Recovered $count original Java classes"
+          test "$count" -ge 200
+
+      - name: Package sources
+        run: |
+          set -euo pipefail
+          mkdir -p build/source-bundle
+          cp -r src tools tests .github build/source-bundle/
+          cp README.md build/source-bundle/
+          cp -r build/decompiled-original build/source-bundle/
+          cp original.jar build/source-bundle/
+          cd build/source-bundle
+          zip -q -r ../DeadsMod-Requiem-Sources.zip .
+
+      - name: Publish downloadable JAR and source ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeadsMod-Requiem-build
+          path: |
+            build/DeadsMod-Requiem-Forge-1.16.5.jar
+            build/DeadsMod-Requiem-Sources.zip
+          if-no-files-found: error
+          retention-days: 30
