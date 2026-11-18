@@ -63,10 +63,14 @@ public final class StructureRecords extends WorldSavedData {
     }
 
     public static Site nearest(Object world, int x, int z) throws Exception {
+        return nearest(world,x,z,null);
+    }
+    public static Site nearest(Object world, int x, int z, String type) throws Exception {
         StructureRecords data=get(world);
         synchronized (data) {
             Site nearest=null; long shortest=Long.MAX_VALUE;
             for (Site s:data.sites) {
+                if(type!=null && !type.equals(s.type))continue;
                 long dx=(long)s.x-x, dz=(long)s.z-z, dist=dx*dx+dz*dz;
                 if (dist < shortest) {shortest=dist; nearest=s;}
             }
@@ -94,7 +98,7 @@ public final class StructureRecords extends WorldSavedData {
         try {
             String raw=(String)WorldgenPolicy.invoke(nbt,new String[]{"func_74779_i","getString"},"ActualLocations");
             if (raw==null || raw.length()>4000000) return;
-            for (String line:raw.split("\n")) {
+            for (String line:raw.split("\\n")) {
                 String[] part=line.split(",",4);
                 if (part.length != 4 || (!WorldgenPolicy.KEY.equals(part[0]) && !WorldgenPolicy.EXIT.equals(part[0]))) continue;
                 sites.add(new Site(part[0],Integer.parseInt(part[1]),Integer.parseInt(part[2]),Integer.parseInt(part[3])));
