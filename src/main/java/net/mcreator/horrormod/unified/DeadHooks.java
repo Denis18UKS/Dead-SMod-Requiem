@@ -19,17 +19,23 @@ public final class DeadHooks {
             Class<?> busClass=Class.forName("net.minecraftforge.common.MinecraftForge");
             Object bus=busClass.getField("EVENT_BUS").get(null);
             Class<?> handlers=Class.forName("net.mcreator.horrormod.unified.CompassEvents");
-            invoke(bus,new String[]{"register"},handlers);
+            registerSubscriber(bus,handlers);
             Class<?> environment=Class.forName("net.minecraftforge.fml.loading.FMLEnvironment");
             Object distribution=environment.getField("dist").get(null);
             if (distribution != null && "CLIENT".equals(distribution.toString())) {
                 Class<?> renderer=Class.forName("net.mcreator.horrormod.unified.ClientOutline");
-                invoke(bus,new String[]{"register"},renderer);
+                registerSubscriber(bus,renderer);
             }
         } catch (Throwable err) {
             System.err.println("[Requiem] Cannot register compass/render events: "+err);
             err.printStackTrace();
         }
+    }
+
+    /** Register static event subscribers using Forge's register(Object) API explicitly. */
+    private static void registerSubscriber(Object bus, Class<?> subscriber) throws Exception {
+        java.lang.reflect.Method method=bus.getClass().getMethod("register",Object.class);
+        method.invoke(bus,subscriber);
     }
 
     public static boolean isDeathDimension(Object world) {
@@ -230,14 +236,14 @@ public final class DeadHooks {
         int x = (int)Math.floor(((Number)invoke(player,new String[]{"func_226277_ct_","getPosX"})).doubleValue());
         int y = (int)Math.floor(((Number)invoke(player,new String[]{"func_226278_cu_","getPosY"})).doubleValue());
         int z = (int)Math.floor(((Number)invoke(player,new String[]{"func_226281_cx_","getPosZ"})).doubleValue());
-        if (safeFloor(world,x,y,z)) return;
+        if (y<=116 && safeFloor(world,x,y,z)) return;
         // Prefer naturally safe terrain close to the portal: no terrain edits if one exists.
         for (int radius=0;radius<=12;radius++) {
             for (int dx=-radius;dx<=radius;dx++) for(int dz=-radius;dz<=radius;dz++) {
                 if(Math.max(Math.abs(dx),Math.abs(dz))!=radius)continue;
                 for(int dy=10;dy>=-18;dy--) {
                     int py=y+dy;
-                    if(py<5 || py>251)continue;
+                    if(py<8 || py>116)continue;
                     if(safeFloor(world,x+dx,py,z+dz)) {
                         teleport(player,world,x+dx+0.5,py,z+dz+0.5);
                         return;
@@ -247,7 +253,7 @@ public final class DeadHooks {
         }
         // No natural opening: place a small indestructible-looking obsidian landing and
         // guarantee a 3-block-high non-suffocating room rather than spawn in solid terrain.
-        int py=Math.max(90,Math.min(241,y+10));
+        int py=Math.max(72,Math.min(108,y+10));
         Object floor=blockState("minecraft:obsidian"), air=blockState("minecraft:air");
         if(floor==null || air==null)throw new IllegalStateException("Spawn platform blocks unavailable");
         for(int dx=-2;dx<=2;dx++)for(int dz=-2;dz<=2;dz++) {
