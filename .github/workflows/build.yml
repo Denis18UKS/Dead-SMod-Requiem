@@ -34,14 +34,15 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p build/classes build/patcher-classes build/test-classes
-          javac --release 8 -encoding UTF-8 -d build/classes src/main/java/net/mcreator/horrormod/unified/*.java
+          javac --release 8 -encoding UTF-8 -d build/classes $(find src/main/java tests/stubs -name '*.java')
           javac --add-exports java.base/jdk.internal.org.objectweb.asm=ALL-UNNAMED --add-exports java.base/jdk.internal.org.objectweb.asm.tree=ALL-UNNAMED -encoding UTF-8 -d build/patcher-classes tools/PatchJar.java
 
       - name: Check worldgen rules
         run: |
           set -euo pipefail
-          javac --release 8 -encoding UTF-8 -cp build/classes -d build/test-classes tests/TestPolicy.java
+          javac --release 8 -encoding UTF-8 -cp build/classes -d build/test-classes tests/TestPolicy.java tests/RepairSmokeTest.java
           java -cp build/classes:build/test-classes TestPolicy
+          java -cp build/classes:build/test-classes RepairSmokeTest
 
       - name: Build single Forge 1.16.5 universal mod
         run: |
