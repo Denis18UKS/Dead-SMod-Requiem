@@ -33,21 +33,15 @@ public final class WorldgenPolicy {
         return "horrormod:death".equals(actual) || "horrormod:dead_woods_biome".equals(actual);
     }
 
-    /** The Dead Dimension has a Nether-like 128-block bedrock ceiling.
-     * OCEAN_FLOOR_WG reports the roof, not the accessible ground below.
-     * Leave the 14/12-block NBT templates safely below the upper bedrock. */
+    /** Compatibility wrappers: v3.3 obtains Y from SurfacePlacement.findOpenSurface. */
     public static int chooseStructureY(java.util.Random rng, int minY, int terrainY) {
-        return chooseStructureYForType(terrainY, 14);
+        return terrainY;
     }
-    public static int chooseStructureYForType(int heightmapY, int templateHeight) {
-        final int MIN_ORIGIN_Y=20;
-        final int MAX_STRUCTURE_TOP_Y=112;
-        int top=Math.min(MAX_STRUCTURE_TOP_Y,heightmapY-12);
-        return Math.max(MIN_ORIGIN_Y,top-templateHeight);
-    }
-    /** The exit has a +2 block placement offset. */
     public static int chooseExitStructureY(java.util.Random rng, int minY, int terrainY) {
-        return chooseStructureYForType(terrainY,14);
+        return terrainY;
+    }
+    public static int chooseStructureYForType(int realSurfaceY, int templateHeight) {
+        return realSurfaceY;
     }
 
     /** The original MCreator procedure checked one random block for deathblock,
@@ -153,25 +147,32 @@ public final class WorldgenPolicy {
 
     public static Object invoke(Object target, String[] names, Object... args) throws Exception {
         if (target == null) return null;
+        // Include inherited interface methods (ISeedReader/IServerWorld often
+        // expose these as default methods, not declared on the implementation).
+        for (Method m : target.getClass().getMethods()) {
+            if (accept(m,names,args)) {m.setAccessible(true);return m.invoke(target,args);}
+        }
         for (Class<?> c = target.getClass(); c != null; c = c.getSuperclass()) {
             for (Method m : c.getDeclaredMethods()) {
-                if (m.getParameterCount() != args.length) continue;
-                boolean named = false;
-                for (String name : names) if (name.equals(m.getName())) named = true;
-                if (!named) continue;
-                Class<?>[] types = m.getParameterTypes();
-                boolean compatible = true;
-                for (int i = 0; i < types.length; i++) {
-                    if (args[i] == null) continue;
-                    Class<?> type = types[i].isPrimitive() ? primitiveBox(types[i]) : types[i];
-                    if (!type.isAssignableFrom(args[i].getClass())) {compatible = false; break;}
-                }
-                if (!compatible) continue;
+                if (!accept(m,names,args)) continue;
                 m.setAccessible(true);
                 return m.invoke(target, args);
             }
         }
         return null;
+    }
+    private static boolean accept(Method m,String[] names,Object[] args) {
+        if (m.getParameterCount() != args.length) return false;
+        boolean named = false;
+        for (String name : names) if (name.equals(m.getName())) named = true;
+        if (!named) return false;
+        Class<?>[] types = m.getParameterTypes();
+        for (int i = 0; i < types.length; i++) {
+            if (args[i] == null) continue;
+            Class<?> type = types[i].isPrimitive() ? primitiveBox(types[i]) : types[i];
+            if (!type.isAssignableFrom(args[i].getClass())) return false;
+        }
+        return true;
     }
     private static Class<?> primitiveBox(Class<?> t) {
         if (t==int.class) return Integer.class;
