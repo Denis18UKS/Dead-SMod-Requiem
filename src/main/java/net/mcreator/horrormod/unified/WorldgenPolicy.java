@@ -33,9 +33,21 @@ public final class WorldgenPolicy {
         return "horrormod:death".equals(actual) || "horrormod:dead_woods_biome".equals(actual);
     }
 
-    /** Keep a recognizable portion of each NBT dungeon above the local terrain. */
+    /** The Dead Dimension has a Nether-like 128-block bedrock ceiling.
+     * OCEAN_FLOOR_WG reports the roof, not the accessible ground below.
+     * Leave the 14/12-block NBT templates safely below the upper bedrock. */
     public static int chooseStructureY(java.util.Random rng, int minY, int terrainY) {
-        return Math.max(minY, Math.min(225, terrainY - 4));
+        return chooseStructureYForType(terrainY, 14);
+    }
+    public static int chooseStructureYForType(int heightmapY, int templateHeight) {
+        final int MIN_ORIGIN_Y=20;
+        final int MAX_STRUCTURE_TOP_Y=112;
+        int top=Math.min(MAX_STRUCTURE_TOP_Y,heightmapY-12);
+        return Math.max(MIN_ORIGIN_Y,top-templateHeight);
+    }
+    /** The exit has a +2 block placement offset. */
+    public static int chooseExitStructureY(java.util.Random rng, int minY, int terrainY) {
+        return chooseStructureYForType(terrainY,14);
     }
 
     /** The original MCreator procedure checked one random block for deathblock,
