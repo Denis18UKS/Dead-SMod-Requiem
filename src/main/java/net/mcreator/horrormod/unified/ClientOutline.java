@@ -3,6 +3,13 @@ package net.mcreator.horrormod.unified;
 import net.minecraftforge.client.event.RenderWorldLastEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import org.lwjgl.opengl.GL11;
+import com.mojang.blaze3d.matrix.MatrixStack;
+import com.mojang.blaze3d.vertex.IVertexBuilder;
+import com.mojang.blaze3d.systems.RenderSystem;
+import net.minecraft.util.math.vector.Matrix4f;
+import net.minecraft.client.renderer.BufferBuilder;
+import net.minecraft.client.renderer.Tessellator;
+import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
 import java.io.DataInputStream;
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -78,44 +85,41 @@ public final class ClientOutline {
             double px=coord(vec,"field_72450_a","x"),py=coord(vec,"field_72448_b","y"),pz=coord(vec,"field_72449_c","z");
             double dx=ox+8-px,dy=oy+6-py,dz=oz+8-pz;
             if(dx*dx+dy*dy+dz*dz>MAX_DISTANCE_SQ)return;
-            GL11.glPushAttrib(GL11.GL_ENABLE_BIT | GL11.GL_COLOR_BUFFER_BIT | GL11.GL_DEPTH_BUFFER_BIT | GL11.GL_LINE_BIT);
-            GL11.glPushMatrix();
+            // RenderWorldLastEvent requires buffered vertices + the camera pose matrix.
+            MatrixStack pose=event.getMatrixStack();
+            pose.func_227860_a_();
             try {
-                // The event pose matrix contains Forge's camera transformations.
-                Object stackMatrix=WorldgenPolicy.invoke(event,new String[]{"getMatrixStack"});
-                Object last=WorldgenPolicy.call(stackMatrix,"func_227866_c_","getLast","last");
-                Object matrix=WorldgenPolicy.call(last,"func_227870_a_","getMatrix","pose");
-                if(matrix!=null) {
-                    Class<?> system=Class.forName("com.mojang.blaze3d.systems.RenderSystem");
-                    for(java.lang.reflect.Method method:system.getDeclaredMethods()) {
-                        if(method.getName().equals("multMatrix") && method.getParameterCount()==1 && method.getParameterTypes()[0].isInstance(matrix)) {
-                            method.invoke(null,matrix);break;
-                        }
-                    }
-                }
-                GL11.glTranslated(-px,-py,-pz);
-                GL11.glDisable(GL11.GL_TEXTURE_2D);
-                GL11.glDisable(GL11.GL_DEPTH_TEST);
-                GL11.glDepthMask(false);
-                GL11.glEnable(GL11.GL_BLEND);
-                GL11.glBlendFunc(GL11.GL_SRC_ALPHA,GL11.GL_ONE_MINUS_SRC_ALPHA);
-                // A soft halo then a thin high-contrast main contour.
-                draw(edges,ox,oy,oz,px,py,pz,3.3f,0.24f);
-                draw(edges,ox,oy,oz,px,py,pz,1.45f,0.98f);
+                pose.func_227861_a_(-px,-py,-pz);
+                Matrix4f matrix=pose.func_227866_c_().func_227870_a_();
+                RenderSystem.disableTexture();
+                RenderSystem.disableDepthTest();
+                RenderSystem.depthMask(false);
+                RenderSystem.enableBlend();
+                RenderSystem.defaultBlendFunc();
+                RenderSystem.disableCull();
+                draw(matrix,edges,ox,oy,oz,px,py,pz,3f,60);
+                draw(matrix,edges,ox,oy,oz,px,py,pz,1.5f,255);
             } finally {
-                GL11.glDepthMask(true);
-                GL11.glPopMatrix();
-                GL11.glPopAttrib();
+                RenderSystem.lineWidth(1f);
+                RenderSystem.depthMask(true);
+                RenderSystem.enableDepthTest();
+                RenderSystem.enableTexture();
+                RenderSystem.enableCull();
+                RenderSystem.disableBlend();
+                pose.func_227865_b_();
             }
         } catch(Throwable ex) {
             if(!logged) {logged=true;System.err.println("[Requiem] Outline renderer: "+ex);ex.printStackTrace();}
         }
     }
 
-    private static void draw(List<Edge> edges,int ox,int oy,int oz,double cx,double cy,double cz,float width,float alpha) {
-        GL11.glLineWidth(width);
-        GL11.glBegin(GL11.GL_LINES);
-        GL11.glColor4f(1f,1f,1f,alpha);
+    private static void draw(Matrix4f matrix,List<Edge> edges,int ox,int oy,int oz,
+                             double cx,double cy,double cz,float width,int alpha) {
+        Tessellator t=Tessellator.func_178181_a_();
+        BufferBuilder b=t.func_178180_c();
+        IVertexBuilder vertices=b;
+        RenderSystem.lineWidth(width);
+        b.func_181668_a(GL11.GL_LINES,DefaultVertexFormats.field_181706_f);
         for(Edge e:edges) {
             double x=(e.ax+e.bx)*.5+ox,y=(e.ay+e.by)*.5+oy,z=(e.az+e.bz)*.5+oz;
             boolean visible=false,hidden=false;
@@ -123,12 +127,13 @@ public final class ClientOutline {
                 double dot=(cx-x)*DX[f]+(cy-y)*DY[f]+(cz-z)*DZ[f];
                 if(dot>=0.001)visible=true;else hidden=true;
             }
-            // Silhouette edge = one front face and one back face; open/single faces count too.
             if(!visible || (!hidden && Integer.bitCount(e.faces)>1))continue;
-            GL11.glVertex3d(ox+e.ax,oy+e.ay,oz+e.az);
-            GL11.glVertex3d(ox+e.bx,oy+e.by,oz+e.bz);
+            vertices.func_227888_a_(matrix,(float)(ox+e.ax),(float)(oy+e.ay),(float)(oz+e.az))
+                    .func_225586_a_(255,255,255,alpha).func_181675_d();
+            vertices.func_227888_a_(matrix,(float)(ox+e.bx),(float)(oy+e.by),(float)(oz+e.bz))
+                    .func_225586_a_(255,255,255,alpha).func_181675_d();
         }
-        GL11.glEnd();
+        t.func_78381_a();
     }
     private static int num(Object tag,String key) throws Exception {
         Object n=WorldgenPolicy.invoke(tag,new String[]{"func_74762_e","getInt"},key);
