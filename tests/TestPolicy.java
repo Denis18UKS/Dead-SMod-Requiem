@@ -45,12 +45,14 @@ public final class TestPolicy {
         }
         require(!net.mcreator.horrormod.unified.WorldgenPolicy.biomeMatches("horrormod:death","minecraft:plains"),"dungeon in non-dead biome");
         require(net.mcreator.horrormod.unified.WorldgenPolicy.chooseStructureY(new java.util.Random(1),8,128)==98,"key origin must fit below bedrock ceiling");
-        check(net.mcreator.horrormod.unified.WorldgenPolicy.chooseExitStructureY(new java.util.Random(1),8,128)==98,"exit origin must fit below ceiling");
+        require(net.mcreator.horrormod.unified.WorldgenPolicy.chooseExitStructureY(new java.util.Random(1),8,128)==98,"exit origin must fit below ceiling");
+        require(net.mcreator.horrormod.unified.WorldgenPolicy.chooseStructureY(new java.util.Random(1),8,7)==20,"Y lower bound error");
+        require(net.mcreator.horrormod.unified.WorldgenPolicy.chooseStructureYForType(50,14)==24,"Y with lower terrain error");
         java.util.Map<String,Object> deps=new java.util.HashMap<String,Object>();
         for(String key:new String[]{"world","x","y","z"})deps.put(key,0);
         require(net.mcreator.horrormod.unified.WorldgenPolicy.allowDeathDungeon(deps),"valid structure rejected");
         deps.remove("world");
         require(!net.mcreator.horrormod.unified.WorldgenPolicy.allowDeathDungeon(deps),"invalid dependencies accepted");
-        System.out.println("PASS: v3.1 increased density, both dead biomes and better ground choice");
+        System.out.println("PASS: v3.2 under-roof height + increased dungeon density");
     }
 }
