@@ -39,6 +39,29 @@ public final class PatchJar implements Opcodes {
                     added.add(new FrameNode(F_SAME, 0, null, 0, null));
                     method.instructions.insert(added);
                     if (entry.getValue().equals("key") || entry.getValue().equals("exit")) {
+                        int surface = 0, grounds = 0;
+                        for (AbstractInsnNode ins : method.instructions.toArray()) {
+                            if (!(ins instanceof MethodInsnNode)) continue;
+                            MethodInsnNode call = (MethodInsnNode) ins;
+                            if (call.owner.equals("net/minecraft/util/math/MathHelper")
+                                    && call.name.equals("func_76136_a") && call.desc.equals("(Ljava/util/Random;II)I")) {
+                                call.owner = GEN;
+                                call.name = "chooseStructureY";
+                                surface++;
+                            }
+                            if ((call.owner.equals("net/mcreator/horrormod/procedures/TestProcedure") || call.owner.equals("net/mcreator/horrormod/procedures/TestOlegProcedure"))
+                                    && call.name.equals("executeProcedure")
+                                    && call.desc.equals("(Ljava/util/Map;)Z")) {
+                                call.owner = GEN;
+                                call.name = "allowDeathDungeon";
+                                call.desc = "(Ljava/lang/Object;)Z";
+                                grounds++;
+                            }
+                        }
+                        if (surface != 1 || grounds != 1)
+                            throw new IllegalStateException("Expected one height choice and terrain gate in " + path + ", got " + surface + "/" + grounds);
+
+
                         int calls = 0;
                         for (AbstractInsnNode ins : method.instructions.toArray()) {
                             if (!(ins instanceof MethodInsnNode)) continue;
@@ -72,6 +95,28 @@ public final class PatchJar implements Opcodes {
                 }
                 if (!hit) throw new IllegalStateException("Missing worldgen method: "+path);
             }
+        }
+        // In the original mod, key and exit dungeons were registered for two
+        // mutually exclusive biomes. Allow both in either dead-dimension biome.
+        if (path.equals(c+"world/structure/DeathSTRStructure.class") ||
+            path.equals(c+"world/structure/ExitStructuredeadStructure.class")) {
+            int count = 0;
+            for (MethodNode method : node.methods) if (method.name.equals("addFeatureToBiomes")) {
+                for (AbstractInsnNode ins : method.instructions.toArray()) {
+                    if (!(ins instanceof MethodInsnNode)) continue;
+                    MethodInsnNode call = (MethodInsnNode)ins;
+                    if (call.owner.equals("net/minecraft/util/ResourceLocation") && call.name.equals("equals")
+                            && call.desc.equals("(Ljava/lang/Object;)Z")) {
+                        call.setOpcode(INVOKESTATIC);
+                        call.owner=GEN;call.name="biomeMatches";
+                        call.desc="(Ljava/lang/Object;Ljava/lang/Object;)Z";
+                        call.itf=false;
+                        count++;
+                    }
+                }
+            }
+            if (count != 1) throw new IllegalStateException("Cannot patch Dead Dimension biome registration for " + path);
+            modified = true;
         }
         if (path.equals(c+"HorrormodMod.class")) {
             boolean installed=false;
