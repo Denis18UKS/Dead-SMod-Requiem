@@ -50,8 +50,14 @@ public final class StructureRecords extends WorldSavedData {
         List<Pending> deferred=new ArrayList<>();
         Pending item;
         while ((item=QUEUE.poll())!=null) {
-            if (item.world==world) get(world).add(item.site);
-            else deferred.add(item);
+            if (item.world==world) {
+                try {get(world).add(item.site);}
+                catch (Exception e) {
+                    QUEUE.add(item); // Do not lose a recorded structure if saved-data access fails.
+                    QUEUE.addAll(deferred);
+                    throw e;
+                }
+            } else deferred.add(item);
         }
         QUEUE.addAll(deferred);
     }
